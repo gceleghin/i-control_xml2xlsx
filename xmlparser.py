@@ -1,8 +1,6 @@
 # Tecan i-control xml to xlsx parser
 # The script takes an xml output from the Tecan i-control software
-# and outputs an excel file
-
-# Last edit: 07/06/2022
+# and outputs an xlsx file
 
 import os
 import re
@@ -18,7 +16,13 @@ else:
 
 filename = os.path.basename(xml)
 filename = filename[:-4]
-tree = ET.parse(xml)
+try:
+    tree = ET.parse(xml)
+except ET.ParseError:
+    sys.exit("XML is probably corrupted, please check that there is no tag missing and try again. Exiting.")
+except FileNotFoundError:
+    sys.exit("File not found. Exiting.")
+
 root = tree.getroot()
 
 workbook = xlsxwriter.Workbook(filename + '.xlsx')
@@ -32,7 +36,7 @@ param_format = workbook.add_format({'shrink': True})
 #
 # The XML output already has the Excel positions (EG: "A1")
 # it wants the results to be in so we keep track of
-# the highest row it writes, so it can safely write after that
+# the highest row it writes, so we can safely write after that
 for section in root.iter('Section'):
 	highestrow = 0
 
