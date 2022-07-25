@@ -31,6 +31,8 @@ well_format = workbook.add_format({'border': True})
 tag_format = workbook.add_format({'bold': True, 'italic': True})
 param_format = workbook.add_format({'shrink': True})
 
+duplicate_index = 0 # For when we have name duplicates we need to sort
+
 # As the output is divided in sections, one for each measurement,
 # we go from section to section and create a worksheet for each
 #
@@ -42,8 +44,15 @@ for section in root.iter('Section'):
 
 	timestart = section.find('Time_Start').text
 	timeend = section.find('Time_End').text
-
-	worksheet = workbook.add_worksheet(section.get('Name'))
+	worksheet_name = section.get('Name')[:30] # Worksheets' names can't be longer than 31
+	try:
+		worksheet = workbook.add_worksheet(worksheet_name)
+	except xlsxwriter.exceptions.DuplicateWorksheetName:
+		print("Worksheet '" + worksheet_name + "' already existing, renaming")
+		worksheet_name += str(duplicate_index)
+		print("Worksheet renamed to " + worksheet_name)
+		duplicate_index += 1
+		worksheet = workbook.add_worksheet(worksheet_name)
 	# Results are divided in "wells"
 	for well in section.iter('Well'):
 		position = well.get('Pos')
