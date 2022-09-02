@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 # Tecan i-control xml to xlsx parser
 # The script takes an xml output from the Tecan i-control software
 # and outputs an xlsx file
