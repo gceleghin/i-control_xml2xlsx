@@ -65,9 +65,9 @@ for section in root.iter('Section'):
         value = float((well.find('Single').text).replace(',','.'))
         worksheet.write_number(position, value, well_format)
 
-    # We take distance from the results then write out
-    # the measurement's parameters 
-    highestrow += 2
+    # Parameters go into their own worksheet
+    worksheet = workbook.add_worksheet("Parameters")
+    highestrow = 0
     worksheet.write(highestrow, 0, "Time start:", tag_format)
     worksheet.write(highestrow, 1, timestart)
     highestrow += 1
