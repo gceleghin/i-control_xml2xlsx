@@ -8,8 +8,19 @@ import os
 import re
 import sys
 import time
+import string
 import xml.etree.ElementTree as ET
 import xlsxwriter
+
+def draw_plate(worksheetToDraw, cycleToDraw, rowsNumber = 8, columnsNumber = 12,):
+    row = 11 * ((cycleToDraw) - 1)
+
+    for colNum in range(columnsNumber):
+        worksheetToDraw.write(row, colNum + 1, colNum + 1, plateFormat)
+
+    for rowNum in range(rowsNumber):
+        worksheetToDraw.write(row + 1, 0, string.ascii_uppercase[rowNum], plateFormat)
+        row += 1
 
 if len(sys.argv) > 1:
     xml = sys.argv[1]
@@ -28,61 +39,63 @@ except FileNotFoundError:
 root = tree.getroot()
 
 workbook = xlsxwriter.Workbook(filename + '.xlsx')
+
 value_format = workbook.add_format({'num_format': '##,####'})
 well_format = workbook.add_format({'border': True})
 tag_format = workbook.add_format({'bold': True, 'italic': True})
 param_format = workbook.add_format({'shrink': True})
+plateFormat = workbook.add_format({'bold': True, 'font_color': 'white', 'bg_color': 'black', 'align': 'center'})
 
 duplicate_index = 0 # For when we have name duplicates we need to sort
 
 # As the output is divided in sections, one for each measurement,
 # we go from section to section and create a worksheet for each
-#
-# The XML output already has the Excel positions (EG: "A1")
-# it wants the results to be in so we keep track of
-# the highest row it writes, so we can safely write after that
 
 for section in root.iter('Section'):
-    highestrow = 0
 
     worksheet_name = section.get('Name')[:24] # Worksheets' names can't be longer than 31
 
+    try:
+        worksheet = workbook.add_worksheet(worksheet_name)
+    except xlsxwriter.exceptions.DuplicateWorksheetName:
+        print("Worksheet '" + worksheet_name + "' already existing, renaming")
+        worksheet_name += str(duplicate_index)
+        print("Worksheet renamed to " + worksheet_name)
+        duplicate_index += 1
+        worksheet = workbook.add_worksheet(worksheet_name)
+
+    # Each section is then divided in cycles
     for dataset in section.iter('Data'):
-        cycle = dataset.attrib["Cycle"]
-        worksheet_name_cycle = worksheet_name + "_cycle_" + str(cycle)
-        try:
-            worksheet = workbook.add_worksheet(worksheet_name_cycle)
-        except xlsxwriter.exceptions.DuplicateWorksheetName:
-            print("Worksheet '" + worksheet_name_cycle + "' already existing, renaming")
-            worksheet_name_cycle += str(duplicate_index)
-            print("Worksheet renamed to " + worksheet_name_cycle)
-            duplicate_index += 1
-            worksheet = workbook.add_worksheet(worksheet_name_cycle)
+        cycle = int(dataset.attrib["Cycle"])
+
+        draw_plate(worksheet, cycle)
+
+        # Inside each cycle, each measurement is in a <Well> tag
         for well in dataset.iter('Well'):
             position = well.get('Pos')
-            # We extract the row's number from the Excel position string
-            # and convert it to the (0,0) notation
-            pos_row = (int(re.search(r'\d+', position).group()) - 1)
+            posColumn = int(re.search(r'\d+', position).group()) # Extracts the numbers in the position
+            posRow = string.ascii_uppercase.index(position[0]) # Gets the letter in the position
+            posRow = (11 * (cycle - 1)) + posRow + 1 # We multiply so subsequent cycles don't overwrite each other
             # TODO: Change the locale instead of brutally change commas into dots
             value = float((well.find('Single').text).replace(',','.'))
-            worksheet.write_number(position, value, well_format)
+            worksheet.write_number(posRow, posColumn, value, well_format)
 
     # Section parameters go into their own worksheet after the cycles
     worksheet = workbook.add_worksheet(worksheet_name + "_param")
-    highestrow = 0
+    highestRow = 0
     timestart = section.find('Time_Start').text
     timeend = section.find('Time_End').text
-    worksheet.write(highestrow, 0, "Time start:", tag_format)
-    worksheet.write(highestrow, 1, timestart)
-    highestrow += 1
-    worksheet.write(highestrow, 0, "Time end:", tag_format)
-    worksheet.write(highestrow, 1, timeend)
-    highestrow += 1
+    worksheet.write(highestRow, 0, "Time start:", tag_format)
+    worksheet.write(highestRow, 1, timestart)
+    highestRow += 1
+    worksheet.write(highestRow, 0, "Time end:", tag_format)
+    worksheet.write(highestRow, 1, timeend)
+    highestRow += 1
     for parameter in section.iter('Parameter'):
-        highestrow += 1
+        highestRow += 1
         col = 0
         for key in parameter.attrib:
-            worksheet.write(highestrow, col, parameter.attrib[key], param_format)
+            worksheet.write(highestRow, col, parameter.attrib[key], param_format)
             col += 1
 
 workbook.close()
