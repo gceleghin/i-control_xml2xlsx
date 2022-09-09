@@ -25,14 +25,18 @@ def draw_plate(worksheetToDraw, cycleToDraw, rowsNumber = 8, columnsNumber = 12,
 if len(sys.argv) > 1:
     xml = sys.argv[1]
 else:
-    sys.exit("You need to pass the name of the xml you want to parse, drag and drop is also supported")
+    sys.exit(
+        "You need to pass the name of the xml you want to parse, drag and drop is also supported"
+    )
 
 filename = os.path.basename(xml)
 filename = filename[:-4]
 try:
     tree = ET.parse(xml)
 except ET.ParseError:
-    sys.exit("XML is probably corrupted, please check that there is no tag missing and try again. Exiting.")
+    sys.exit(
+        "XML is probably corrupted, please check that there is no tag missing and try again. Exiting."
+    )
 except FileNotFoundError:
     sys.exit("File not found. Exiting.")
 
@@ -44,7 +48,9 @@ value_format = workbook.add_format({'num_format': '##,####'})
 well_format = workbook.add_format({'border': True})
 tag_format = workbook.add_format({'bold': True, 'italic': True})
 param_format = workbook.add_format({'shrink': True})
-plateFormat = workbook.add_format({'bold': True, 'font_color': 'white', 'bg_color': 'black', 'align': 'center'})
+plateFormat = workbook.add_format({
+    'bold': True, 'font_color': 'white', 'bg_color': 'black', 'align': 'center'
+})
 
 duplicate_index = 0 # For when we have name duplicates we need to sort
 
@@ -53,7 +59,8 @@ duplicate_index = 0 # For when we have name duplicates we need to sort
 
 for section in root.iter('Section'):
 
-    worksheet_name = section.get('Name')[:24] # Worksheets' names can't be longer than 31
+    # Worksheets' names can't be longer than 31, leaving some space for additions
+    worksheet_name = section.get('Name')[:24]
 
     try:
         worksheet = workbook.add_worksheet(worksheet_name)
@@ -73,15 +80,19 @@ for section in root.iter('Section'):
         # Inside each cycle, each measurement is in a <Well> tag
         for well in dataset.iter('Well'):
             position = well.get('Pos')
-            posColumn = int(re.search(r'\d+', position).group()) # Extracts the numbers in the position
-            posRow = string.ascii_uppercase.index(position[0]) # Gets the letter in the position
-            posRow = (11 * (cycle - 1)) + posRow + 1 # We multiply so subsequent cycles don't overwrite each other
+            # Extracts the numbers in the position
+            posColumn = int(re.search(r'\d+', position).group())
+            # Gets the letter in the position
+            posRow = string.ascii_uppercase.index(position[0])
+            # We multiply so subsequent cycles don't overwrite each other
+            posRow = (11 * (cycle - 1)) + posRow + 1
             # TODO: Change the locale instead of brutally change commas into dots
             value = float((well.find('Single').text).replace(',','.'))
             worksheet.write_number(posRow, posColumn, value, well_format)
 
     # Section parameters go into their own worksheet after the cycles
     worksheet = workbook.add_worksheet(worksheet_name + "_param")
+    worksheet.set_column(0, 1, 25)
     highestRow = 0
     timestart = section.find('Time_Start').text
     timeend = section.find('Time_End').text
