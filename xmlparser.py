@@ -12,14 +12,14 @@ import string
 import xml.etree.ElementTree as ET
 import xlsxwriter
 
-def draw_plate(worksheetToDraw, cycleToDraw, rowsNumber = 8, columnsNumber = 12,):
-    row = 11 * ((cycleToDraw) - 1)
+def draw_plate(worksheet_to_draw, cycle_to_draw, rows_number = 8, columns_number = 12,):
+    row = 11 * ((cycle_to_draw) - 1)
 
-    for colNum in range(columnsNumber):
-        worksheetToDraw.write(row, colNum + 1, colNum + 1, plateFormat)
+    for col_num in range(columns_number):
+        worksheet_to_draw.write(row, col_num + 1, col_num + 1, plate_format)
 
-    for rowNum in range(rowsNumber):
-        worksheetToDraw.write(row + 1, 0, string.ascii_uppercase[rowNum], plateFormat)
+    for row_num in range(rows_number):
+        worksheet_to_draw.write(row + 1, 0, string.ascii_uppercase[row_num], plate_format)
         row += 1
 
 if len(sys.argv) > 1:
@@ -45,10 +45,11 @@ root = tree.getroot()
 workbook = xlsxwriter.Workbook(filename + '.xlsx')
 
 value_format = workbook.add_format({'num_format': '##,####'})
-well_format = workbook.add_format({'border': True})
+measured_well_format = workbook.add_format({'border': True})
+invalid_well_format = workbook.add_format({'border': True, 'bg_color': 'yellow'})
 tag_format = workbook.add_format({'bold': True, 'italic': True})
 param_format = workbook.add_format({'shrink': True})
-plateFormat = workbook.add_format({
+plate_format = workbook.add_format({
     'bold': True, 'font_color': 'white', 'bg_color': 'black', 'align': 'center'
 })
 
@@ -81,32 +82,36 @@ for section in root.iter('Section'):
         for well in dataset.iter('Well'):
             position = well.get('Pos')
             # Extracts the numbers in the position
-            posColumn = int(re.search(r'\d+', position).group())
+            pos_column = int(re.search(r'\d+', position).group())
             # Gets the letter in the position
-            posRow = string.ascii_uppercase.index(position[0])
+            pos_row = string.ascii_uppercase.index(position[0])
             # We multiply so subsequent cycles don't overwrite each other
-            posRow = (11 * (cycle - 1)) + posRow + 1
+            pos_row = (11 * (cycle - 1)) + pos_row + 1
             # TODO: Change the locale instead of brutally change commas into dots
             value = float((well.find('Single').text).replace(',','.'))
-            worksheet.write_number(posRow, posColumn, value, well_format)
+            status = well.find('Single').get('Status')
+            if status == "Invalid":
+                worksheet.write_number(pos_row, pos_column, value, invalid_well_format)
+            else:
+                worksheet.write_number(pos_row, pos_column, value, measured_well_format)
 
     # Section parameters go into their own worksheet after the cycles
     worksheet = workbook.add_worksheet(worksheet_name + "_param")
     worksheet.set_column(0, 1, 25)
-    highestRow = 0
+    current_row = 0
     timestart = section.find('Time_Start').text
     timeend = section.find('Time_End').text
-    worksheet.write(highestRow, 0, "Time start:", tag_format)
-    worksheet.write(highestRow, 1, timestart)
-    highestRow += 1
-    worksheet.write(highestRow, 0, "Time end:", tag_format)
-    worksheet.write(highestRow, 1, timeend)
-    highestRow += 1
+    worksheet.write(current_row, 0, "Time start:", tag_format)
+    worksheet.write(current_row, 1, timestart)
+    current_row += 1
+    worksheet.write(current_row, 0, "Time end:", tag_format)
+    worksheet.write(current_row, 1, timeend)
+    current_row += 1
     for parameter in section.iter('Parameter'):
-        highestRow += 1
+        current_row += 1
         col = 0
         for key in parameter.attrib:
-            worksheet.write(highestRow, col, parameter.attrib[key], param_format)
+            worksheet.write(current_row, col, parameter.attrib[key], param_format)
             col += 1
 
 try:
