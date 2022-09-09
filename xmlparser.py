@@ -109,4 +109,9 @@ for section in root.iter('Section'):
             worksheet.write(highestRow, col, parameter.attrib[key], param_format)
             col += 1
 
-workbook.close()
+try:
+    workbook.close()
+except xlsxwriter.exceptions.FileCreateError as e:
+    print("Can't create file. It may happen if you have the file already open or",
+        "if you don't have write permission in the folder you are running the script in.")
+    print(e)
