@@ -13,7 +13,7 @@ import xml.etree.ElementTree as ET
 import xlsxwriter
 
 def draw_plate(worksheet_to_draw, cycle_to_draw, rows_number = 8, columns_number = 12,):
-    row = 11 * ((cycle_to_draw) - 1)
+    row = (11 * ((cycle_to_draw) - 1)) + 1
 
     for col_num in range(columns_number):
         worksheet_to_draw.write(row, col_num + 1, col_num + 1, plate_format)
@@ -50,8 +50,8 @@ invalid_well_format = workbook.add_format({'border': True, 'bg_color': 'yellow'}
 tag_format = workbook.add_format({'bold': True, 'italic': True})
 param_format = workbook.add_format({'shrink': True})
 plate_format = workbook.add_format({
-    'bold': True, 'font_color': 'white', 'bg_color': 'black', 'align': 'center'
-})
+    'bold': True, 'font_color': 'white', 'bg_color': '008080', 'align': 'center'})
+cycle_info_format = workbook.add_format({'font_color': 'white', 'bg_color': '008080', 'align': 'left'})
 
 duplicate_index = 0 # For when we have name duplicates we need to sort
 
@@ -72,9 +72,40 @@ for section in root.iter('Section'):
         duplicate_index += 1
         worksheet = workbook.add_worksheet(worksheet_name)
 
+    worksheet.set_column(0, 0, 3)
+
     # Each section is then divided in cycles
     for dataset in section.iter('Data'):
         cycle = int(dataset.attrib["Cycle"])
+
+        cycle_first_row = (11 * (cycle - 1))
+        first_column = 1
+        worksheet.merge_range(cycle_first_row, first_column, cycle_first_row, first_column + 1, "Cycle:", cycle_info_format)
+        first_column += 2
+        worksheet.merge_range(cycle_first_row, first_column, cycle_first_row, first_column + 1, cycle, cycle_info_format)
+        
+
+        try:
+            cycle_start = dataset.attrib["Time_Start"]
+            first_column += 2
+            worksheet.merge_range(cycle_first_row, first_column, cycle_first_row, first_column + 1, "Time start:", cycle_info_format)
+            first_column += 2
+            worksheet.merge_range(cycle_first_row, first_column, cycle_first_row, first_column + 1, cycle_start, cycle_info_format)
+        except KeyError as e:
+            pass
+
+        try:
+            cycle_temperature = dataset.attrib['Temperature']
+            first_column += 2
+            worksheet.merge_range(cycle_first_row, first_column, cycle_first_row, first_column + 1, "Temperature:", cycle_info_format)
+            first_column += 2
+            worksheet.merge_range(cycle_first_row, first_column, cycle_first_row, first_column + 1, cycle_temperature, cycle_info_format)
+        except KeyError as e:
+            pass
+
+        if first_column < 13:
+            first_column += 2
+            worksheet.merge_range(cycle_first_row, first_column, cycle_first_row, 12, "", cycle_info_format)
 
         draw_plate(worksheet, cycle)
 
@@ -86,7 +117,7 @@ for section in root.iter('Section'):
             # Gets the letter in the position
             pos_row = string.ascii_uppercase.index(position[0])
             # We multiply so subsequent cycles don't overwrite each other
-            pos_row = (11 * (cycle - 1)) + pos_row + 1
+            pos_row = (11 * (cycle - 1)) + pos_row + 2
             # TODO: Change the locale instead of brutally change commas into dots
             value = float((well.find('Single').text).replace(',','.'))
             status = well.find('Single').get('Status')
@@ -95,24 +126,24 @@ for section in root.iter('Section'):
             else:
                 worksheet.write_number(pos_row, pos_column, value, measured_well_format)
 
-    # Section parameters go into their own worksheet after the cycles
-    worksheet = workbook.add_worksheet(worksheet_name + "_param")
-    worksheet.set_column(0, 1, 25)
+    # Section parameters go on the right
+    start_column = 14;
+    worksheet.set_column(start_column, start_column + 1, 25)
     current_row = 0
-    timestart = section.find('Time_Start').text
-    timeend = section.find('Time_End').text
-    worksheet.write(current_row, 0, "Time start:", tag_format)
-    worksheet.write(current_row, 1, timestart)
+    time_start = section.find('Time_Start').text
+    time_end = section.find('Time_End').text
+    worksheet.write(current_row, start_column, "Time start:", tag_format)
+    worksheet.write(current_row, start_column + 1, time_start)
     current_row += 1
-    worksheet.write(current_row, 0, "Time end:", tag_format)
-    worksheet.write(current_row, 1, timeend)
+    worksheet.write(current_row, start_column, "Time end:", tag_format)
+    worksheet.write(current_row, start_column + 1, time_end)
     current_row += 1
     for parameter in section.iter('Parameter'):
         current_row += 1
-        col = 0
+        column = start_column
         for key in parameter.attrib:
-            worksheet.write(current_row, col, parameter.attrib[key], param_format)
-            col += 1
+            worksheet.write(current_row, column, parameter.attrib[key], param_format)
+            column += 1
 
 try:
     workbook.close()
