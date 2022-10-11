@@ -12,15 +12,74 @@ import string
 import xml.etree.ElementTree as ET
 import xlsxwriter
 
-def draw_plate(worksheet_to_draw, cycle_to_draw, rows_number = 8, columns_number = 12,):
-    row = (11 * ((cycle_to_draw) - 1)) + 1
+def draw_plate_fluorescence(worksheet, cycle, rows_number = 8, columns_number = 12,):
+    row = (11 * ((cycle) - 1)) + 1
 
     for col_num in range(columns_number):
-        worksheet_to_draw.write(row, col_num + 1, col_num + 1, plate_format)
+        worksheet.write(row, col_num + 1, col_num + 1, plate_format)
 
     for row_num in range(rows_number):
-        worksheet_to_draw.write(row + 1, 0, string.ascii_uppercase[row_num], plate_format)
+        worksheet.write(row + 1, 0, string.ascii_uppercase[row_num], plate_format)
         row += 1
+
+def draw_plate_scan(worksheet, dataset, cycle, wavelength_start, wavelength_end, wavelength_step):
+    row = (11 * ((cycle) - 1)) + 1
+    columns_number = int(((wavelength_end - wavelength_start) / wavelength_step) + 1)
+
+    for col_num in range(columns_number):
+        wavelength = wavelength_start + (wavelength_step * (col_num))
+        worksheet.write(row, col_num + 1, wavelength, plate_format)
+
+    for well in dataset.iter('Well'):
+        position = well.get('Pos')
+        pos_col = 0
+        row += 1
+        worksheet.write(row, pos_col, position, plate_format)
+        for scan in well.iter('Scan'):
+            wave = float(scan.get('WL'))
+            pos_col = ((wave - wavelength_start) / wavelength_step) + 1
+            value = float(scan.text)
+            worksheet.write_number(row, pos_col, value, measured_well_format)
+
+    write_parameters(worksheet, columns_number + 2)
+
+def write_fluorescence_data(worksheet_to_draw, dataset, cycle):
+    # Inside each cycle, each measurement is in a <Well> tag
+    for well in dataset.iter('Well'):
+        position = well.get('Pos')
+        # Extracts the numbers in the position
+        pos_column = int(re.search(r'\d+', position).group())
+        # Gets the letter in the position
+        pos_row = string.ascii_uppercase.index(position[0])
+        # We multiply so subsequent cycles don't overwrite each other
+        pos_row = (11 * (cycle - 1)) + pos_row + 2
+        # TODO: Change the locale instead of brutally change commas into dots
+        value = float((well.find('Single').text).replace(',','.'))
+        status = well.find('Single').get('Status')
+        if status == "Invalid":
+            worksheet.write_number(pos_row, pos_column, value, invalid_well_format)
+        else:
+            worksheet.write_number(pos_row, pos_column, value, measured_well_format)
+
+    write_parameters(worksheet, 15)
+
+def write_parameters(worksheet, start_column, current_row = 0):
+    # Section parameters go on the right
+    worksheet.set_column(start_column, start_column + 1, 25)
+    time_start = section.find('Time_Start').text
+    time_end = section.find('Time_End').text
+    worksheet.write(current_row, start_column, "Time start:", tag_format)
+    worksheet.write(current_row, start_column + 1, time_start)
+    current_row += 1
+    worksheet.write(current_row, start_column, "Time end:", tag_format)
+    worksheet.write(current_row, start_column + 1, time_end)
+    current_row += 1
+    for parameter in section.iter('Parameter'):
+        current_row += 1
+        column = start_column
+        for key in parameter.attrib:
+            worksheet.write(current_row, column, parameter.attrib[key], param_format)
+            column += 1
 
 if len(sys.argv) > 1:
     xml = sys.argv[1]
@@ -83,7 +142,6 @@ for section in root.iter('Section'):
         worksheet.merge_range(cycle_first_row, first_column, cycle_first_row, first_column + 1, "Cycle:", cycle_info_format)
         first_column += 2
         worksheet.merge_range(cycle_first_row, first_column, cycle_first_row, first_column + 1, cycle, cycle_info_format)
-        
 
         try:
             cycle_start = dataset.attrib["Time_Start"]
@@ -103,47 +161,18 @@ for section in root.iter('Section'):
         except KeyError as e:
             pass
 
-        if first_column < 13:
+        if first_column < 11:
             first_column += 2
             worksheet.merge_range(cycle_first_row, first_column, cycle_first_row, 12, "", cycle_info_format)
 
-        draw_plate(worksheet, cycle)
-
-        # Inside each cycle, each measurement is in a <Well> tag
-        for well in dataset.iter('Well'):
-            position = well.get('Pos')
-            # Extracts the numbers in the position
-            pos_column = int(re.search(r'\d+', position).group())
-            # Gets the letter in the position
-            pos_row = string.ascii_uppercase.index(position[0])
-            # We multiply so subsequent cycles don't overwrite each other
-            pos_row = (11 * (cycle - 1)) + pos_row + 2
-            # TODO: Change the locale instead of brutally change commas into dots
-            value = float((well.find('Single').text).replace(',','.'))
-            status = well.find('Single').get('Status')
-            if status == "Invalid":
-                worksheet.write_number(pos_row, pos_column, value, invalid_well_format)
-            else:
-                worksheet.write_number(pos_row, pos_column, value, measured_well_format)
-
-    # Section parameters go on the right
-    start_column = 14;
-    worksheet.set_column(start_column, start_column + 1, 25)
-    current_row = 0
-    time_start = section.find('Time_Start').text
-    time_end = section.find('Time_End').text
-    worksheet.write(current_row, start_column, "Time start:", tag_format)
-    worksheet.write(current_row, start_column + 1, time_start)
-    current_row += 1
-    worksheet.write(current_row, start_column, "Time end:", tag_format)
-    worksheet.write(current_row, start_column + 1, time_end)
-    current_row += 1
-    for parameter in section.iter('Parameter'):
-        current_row += 1
-        column = start_column
-        for key in parameter.attrib:
-            worksheet.write(current_row, column, parameter.attrib[key], param_format)
-            column += 1
+        try:
+            wavelength_start = int(section.find("./Parameters/Parameter[@Name='Emission Wavelength Start']").attrib['Value'])
+            wavelength_end = int(section.find("./Parameters/Parameter[@Name='Emission Wavelength End']").attrib['Value'])
+            wavelength_step = int(section.find("./Parameters/Parameter[@Name='Emission Wavelength Step Size']").attrib['Value'])
+            draw_plate_scan(worksheet, dataset, cycle, wavelength_start, wavelength_end, wavelength_step)
+        except AttributeError as e:
+            draw_plate_fluorescence(worksheet, cycle)
+            write_fluorescence_data(worksheet, dataset, cycle)
 
 try:
     workbook.close()
