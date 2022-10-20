@@ -14,6 +14,12 @@ It generates a worksheet for every section it encounters, which contains a table
   - Just drag and drop the xml on the script, but please note you won't read any error in this way. Try it from the command line if it doesn't work.
 
 
+## Limits
+
+Sadly i-control's XML output isn't as complete as its xls one. There are measurements that only appear when using i-control with Excel installed, like the "Gain" value: as it doesn't appear in the XML of the same measurement, the script can't transcribe it.
+
+
+
 ## To Dos
 
 I didn't have many outputs to test it so for now it may not handle every type of measurement.
