@@ -12,7 +12,7 @@ import string
 import xml.etree.ElementTree as ET
 import xlsxwriter
 
-def draw_plate_fluorescence(worksheet, cycle, rows_number = 8, columns_number = 12,):
+def draw_plate_fluorescence(worksheet, dataset, cycle, rows_number = 8, columns_number = 12,):
     row = (11 * ((cycle) - 1)) + 1
 
     for col_num in range(columns_number):
@@ -21,6 +21,26 @@ def draw_plate_fluorescence(worksheet, cycle, rows_number = 8, columns_number = 
     for row_num in range(rows_number):
         worksheet.write(row + 1, 0, string.ascii_uppercase[row_num], plate_format)
         row += 1
+
+    # Inside each cycle, each measurement is in a <Well> tag
+    for well in dataset.iter('Well'):
+        position = well.get('Pos')
+        # Extracts the numbers in the position
+        pos_column = int(re.search(r'\d+', position).group())
+        # Gets the letter in the position
+        pos_row = string.ascii_uppercase.index(position[0])
+        # We multiply so subsequent cycles don't overwrite each other
+        pos_row = (11 * (cycle - 1)) + pos_row + 2
+        # TODO: Change the locale instead of brutally change commas into dots
+        value = float((well.find('Single').text).replace(',','.'))
+        status = well.find('Single').get('Status')
+        if status == "Invalid":
+            worksheet.write_number(pos_row, pos_column, value, invalid_well_format)
+        else:
+            worksheet.write_number(pos_row, pos_column, value, measured_well_format)
+
+    write_parameters(worksheet, 15)
+
 
 def draw_plate_scan(worksheet, dataset, cycle, wavelength_start, wavelength_end, wavelength_step):
     row = (11 * ((cycle) - 1)) + 1
@@ -43,25 +63,6 @@ def draw_plate_scan(worksheet, dataset, cycle, wavelength_start, wavelength_end,
 
     write_parameters(worksheet, columns_number + 2)
 
-def write_fluorescence_data(worksheet_to_draw, dataset, cycle):
-    # Inside each cycle, each measurement is in a <Well> tag
-    for well in dataset.iter('Well'):
-        position = well.get('Pos')
-        # Extracts the numbers in the position
-        pos_column = int(re.search(r'\d+', position).group())
-        # Gets the letter in the position
-        pos_row = string.ascii_uppercase.index(position[0])
-        # We multiply so subsequent cycles don't overwrite each other
-        pos_row = (11 * (cycle - 1)) + pos_row + 2
-        # TODO: Change the locale instead of brutally change commas into dots
-        value = float((well.find('Single').text).replace(',','.'))
-        status = well.find('Single').get('Status')
-        if status == "Invalid":
-            worksheet.write_number(pos_row, pos_column, value, invalid_well_format)
-        else:
-            worksheet.write_number(pos_row, pos_column, value, measured_well_format)
-
-    write_parameters(worksheet, 15)
 
 def write_parameters(worksheet, start_column, current_row = 0):
     # Section parameters go on the right
@@ -171,8 +172,7 @@ for section in root.iter('Section'):
             wavelength_step = int(section.find("./Parameters/Parameter[@Name='Emission Wavelength Step Size']").attrib['Value'])
             draw_plate_scan(worksheet, dataset, cycle, wavelength_start, wavelength_end, wavelength_step)
         except AttributeError as e:
-            draw_plate_fluorescence(worksheet, cycle)
-            write_fluorescence_data(worksheet, dataset, cycle)
+            draw_plate_fluorescence(worksheet, dataset, cycle)
 
 try:
     workbook.close()
